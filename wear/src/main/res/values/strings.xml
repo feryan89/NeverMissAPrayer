@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Never Miss A Prayer</string>
+    <string name="hello_round">Hello Round World!</string>
+    <string name="hello_square">Hello Square World!</string>
+</resources>

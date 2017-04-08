@@ -20,6 +20,7 @@ import android.util.Log;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 
 public class MainActivity extends Activity {
@@ -27,13 +28,11 @@ public class MainActivity extends Activity {
     private TextView mTextView;
     private static final String TAG = "MainActivity";
     private static final int MY_PERMISSIONS_REQUEST_BODY_SENSORS = 1;
+    ArrayList<String> titles = new ArrayList<String>();
+    ArrayList<Long> startTimes = new ArrayList<Long>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        /*
-        // Keep the Wear screen always on (for testing only!)
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        */
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mTextView = (TextView) findViewById(R.id.text);
@@ -49,7 +48,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        scheduleNotification(getNotification("Asr Prayer","Go to the mosque"), System.currentTimeMillis()+10000);
+        //scheduleNotification(getNotification("Asr Prayer","Go to the mosque"), System.currentTimeMillis()+10000);
 
         // Register the local broadcast receiver
         IntentFilter messageFilter = new IntentFilter(Intent.ACTION_SEND);
@@ -58,23 +57,18 @@ public class MainActivity extends Activity {
     }
 
     public class MessageReceiver extends BroadcastReceiver {
-
         @Override
         public void onReceive(Context context, Intent intent) {
             Bundle data = intent.getBundleExtra("datamap");
             long numbers = data.getLong("numbers");
-            /*
             for(int x = 0; x < numbers; x++){
                 titles.add(data.getString("title"+x));
-                descriptions.add(data.getString("description"+x));
-                beginTimes.add(data.getLong("begin"+x));
-                endTimes.add(data.getLong("end"+x));
+                startTimes.add(data.getLong("starttimes"+x));
             }
             if(titles.size()==numbers){
                 displayInfo();
                 sendNotifications();
             }
-            */
         }
     }
 
@@ -87,7 +81,7 @@ public class MainActivity extends Activity {
 
         Date date = new Date(beginTime);
         String dateString = null;
-        SimpleDateFormat sdfr = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
+        SimpleDateFormat sdfr = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
         dateString = sdfr.format(date);
         Log.v("time", dateString);
         long futureInMillis = beginTime;
@@ -105,24 +99,25 @@ public class MainActivity extends Activity {
         return notification;
     }
 
-    /*
+
     public void sendNotifications(){
         for(int i = 0; i < titles.size(); i++){
-            scheduleNotification(getNotification(titles.get(i),descriptions.get(i), beginTimes.get(i), endTimes.get(i)),
-                    beginTimes.get(i), 1000);
+            scheduleNotification(getNotification(titles.get(i),"Go to the mosque."), startTimes.get(i));
         }
     }
+
 
     public void displayInfo(){
         String display = "";
         display = "Received from the data Layer\n";
         for(int x = 0; x < titles.size(); x++){
             display += titles.get(x) + ": ";
-            display += descriptions.get(x) + "\n";
+            display += "Go to the mosque. " + ": ";
+            display += Long.toString(startTimes.get(x)) + "\n";
         }
         mTextView.setText(display);
     }
-    */
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {

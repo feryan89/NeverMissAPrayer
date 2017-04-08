@@ -12,9 +12,13 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.CountDownTimer;
 import android.os.IBinder;
+import android.os.PowerManager;
+import android.os.Vibrator;
 import android.support.annotation.Nullable;
 import android.util.Log;
 import android.widget.Toast;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by puntnomads on 28/10/2016.
@@ -31,6 +35,9 @@ public class NotificationPublisherService extends Service implements SensorEvent
     public static String NOTIFICATION = "notification";
     private SensorManager sensorManager;
     private static int distance;
+    private static int initialDistance;
+    private static boolean firstValue;
+    Vibrator v;
     NotificationManager notificationManager;
     Notification notification;
     int id;
@@ -39,41 +46,63 @@ public class NotificationPublisherService extends Service implements SensorEvent
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wakelock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DoNotDimScreen");
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         Sensor countSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
         if (countSensor != null) {
+            firstValue = true;
+            distance = 0;
+            initialDistance = 0;
             sensorManager.registerListener(this, countSensor, SensorManager.SENSOR_DELAY_FASTEST);
         } else {
             Toast.makeText(this, "Count sensor not available!", Toast.LENGTH_LONG).show();
         }
 
+        v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         notification = intent.getParcelableExtra(NOTIFICATION);
         id = intent.getIntExtra(NOTIFICATION_ID, 0);
-        //notificationManager.notify(id, notification);
+        notificationManager.notify(id, notification);
 
-        timer = new CountDownTimer(300000, 1000) {
+        wakelock.acquire(601000);
+        timer = new CountDownTimer(600000, 1000) {
             public void onTick(long millisUntilFinished) {
-                Log.i("Time-", "seconds remaining: " + millisUntilFinished / 1000);
-                if(distance>9){
-                notificationManager.notify(id, notification);
-                cancelCountDownTimer();
+                if(distance > 49) {
+                    notificationManager.notify(id, notification);
+                    cancelCountDownTimer();
+                }
+
+                Log.v("Millis: ", Long.toString(millisUntilFinished));
+                // http://stackoverflow.com/questions/17620641/countdowntimer-in-minutes-and-seconds
+                // http://stackoverflow.com/questions/6810416/android-countdowntimer-shows-1-for-two-seconds/6811744#6811744
+                if(Math.round(millisUntilFinished/1000) < 301){
+                    if(Math.round(millisUntilFinished/1000) % 2 == 0){
+                        Log.v("Time: ", Long.toString(Math.round(millisUntilFinished/1000)));
+                        v.vibrate(1000);
+                        // countdown timer in watch is unreliable when not in charger (stackoverflow)
+                    }
                 }
             }
             public void onFinish() {
-                //startVibrating();
+                Log.v("Finish: ", "all");
             }
         }.start();
 
+        Log.v("Finish: ", "timer");
         NotificationReceiver.completeWakefulIntent(intent);
-        // If we get killed, after returning from here, restart
+        stopSelf();
         return START_NOT_STICKY;
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        distance = (int)event.values[0];
-        String msg = "Count: " + (int)event.values[0];
+        if(firstValue){
+            initialDistance = (int)event.values[0];
+            firstValue = false;
+        }
+        distance = (int)event.values[0] - initialDistance;
+        String msg = "Count: " + distance;
         Log.i("", msg);
     }
     @Override

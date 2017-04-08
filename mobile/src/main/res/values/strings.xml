@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Never Miss A Prayer</string>
+
+    <string-array name="prayers_array">
+        <item>Fajr Prayer</item>
+        <item>Duhr Prayer</item>
+        <item>Asr Prayer</item>
+        <item>Maghreb Prayer</item>
+        <item>Isha Prayer</item>
+    </string-array>
 </resources>

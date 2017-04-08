@@ -1,25 +1,10 @@
 package com.puntnomads.nevermissaprayer;
 
-import android.*;
-import android.content.ContentResolver;
-import android.content.ContentUris;
-import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.net.Uri;
-import android.os.Build;
-import android.provider.CalendarContract;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.text.format.DateUtils;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
-import android.widget.DatePicker;
-import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.TimePicker;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -30,120 +15,143 @@ import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
-import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
+import java.util.*;
 import java.util.Date;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+
 public class MainActivity extends AppCompatActivity implements
-        GoogleApiClient.ConnectionCallbacks,
-        GoogleApiClient.OnConnectionFailedListener{
-    // Projection array. Creating indices for this array instead of doing
-// dynamic lookups improves performance.
-    public static final String[] EVENT_PROJECTION = new String[] {
-            CalendarContract.Calendars._ID,                           // 0
-            CalendarContract.Calendars.ACCOUNT_NAME,                  // 1
-            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,         // 2
-            CalendarContract.Calendars.OWNER_ACCOUNT                  // 3
-    };
+        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, Callback<MainPojo> {
 
-    private static final String[] INSTANCE_PROJECTION = {
-            CalendarContract.Instances.TITLE,
-            CalendarContract.Instances.DESCRIPTION,
-            CalendarContract.Instances.BEGIN,
-            CalendarContract.Instances.END
-    };
-
-    // Request code for READ_CONTACTS. It can be any number > 0.
-    private static final int PERMISSIONS_REQUEST_READ_CALENDAR = 1;
-
-    private EditText titlesEditText;
-    private EditText descriptionsEditText;
-    private TimePicker timePicker;
-    private DatePicker datePicker;
-    private Button saveButton;
+    private Button syncButton;
+    private Button sendButton;
     ArrayList<String> titles = new ArrayList<String>();
-    ArrayList<String> descriptions = new ArrayList<String>();
     ArrayList<Long> startTimes = new ArrayList<Long>();
-
     GoogleApiClient googleClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        titlesEditText = (EditText) findViewById(R.id.titles_editText);
-        descriptionsEditText = (EditText) findViewById(R.id.description_editText);
-        timePicker = (TimePicker) findViewById(R.id.timePicker);
-        datePicker = (DatePicker) findViewById(R.id.datePicker);
-        saveButton = (Button) findViewById(R.id.saveButton);
-        saveButton.setOnClickListener(new View.OnClickListener() {
+
+        syncButton = (Button) findViewById(R.id.syncButton);
+        sendButton = (Button) findViewById(R.id.sendButton);
+        syncButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                titles.add(titlesEditText.getText().toString());
-                Log.v("title:", titlesEditText.getText().toString());
-                descriptions.add(descriptionsEditText.getText().toString());
-                Log.v("description:", descriptionsEditText.getText().toString());
-                Calendar calendar = Calendar.getInstance();
-                calendar.set(datePicker.getYear(), datePicker.getMonth(), datePicker.getDayOfMonth(),
-                        timePicker.getHour(), timePicker.getMinute(), 0);
-                startTimes.add(calendar.getTimeInMillis());
-                Log.v("Start Time:", String.valueOf(calendar.getTimeInMillis()));
-                //Log.v("EditText", mEdit.getText().toString());
+                getDataFromAPI();
             }
         });
-        // Build a new GoogleApiClient for the the Wearable API
+        sendButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                getEvents();
+            }
+        });
         googleClient = new GoogleApiClient.Builder(this)
                 .addApi(Wearable.API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
-        askPermissions();
+
+
     }
 
-    public void askPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{android.Manifest.permission.READ_CALENDAR}, PERMISSIONS_REQUEST_READ_CALENDAR);
-            //After this point you wait for callback in onRequestPermissionsResult(int, String[], int[]) overriden method
-        } else {
-            // Android version is lesser than 6.0 or the permission is already granted.
-            getEvents();
+    private void getDataFromAPI(){
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("https://aladhan.com/prayer-times-api/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
+        // prepare call in Retrofit 2.0
+        AladhanAPI aladhanAPI = retrofit.create(AladhanAPI.class);
+
+        // http://api.aladhan.com/timingsByCity/1486192485?city=Dubai&country=AE&method=4
+        String timestamp = Long.toString((System.currentTimeMillis()/1000)+43200);
+        String url = "http://api.aladhan.com"+"/timingsByCity/" + timestamp + "?city=AbuDhabi&country=AE&method=4";
+        Call<MainPojo> call = aladhanAPI.loadPrayerTimes(url);
+        //asynchronous call
+        call.enqueue(this);
+    }
+
+    @Override
+    public void onResponse(Call<MainPojo> call, Response<MainPojo> response) {
+        String day = response.body().getData().getDate().getReadable();
+        String time;
+
+        titles.add("Fajr Prayer");
+        time = response.body().getData().getTimings().getFajr();
+        startTimes.add(convertStringToLong(day,time));
+
+        titles.add("Dhuhr Prayer");
+        time = response.body().getData().getTimings().getDhuhr();
+        startTimes.add(convertStringToLong(day,time));
+
+        titles.add("Asr Prayer");
+        time = response.body().getData().getTimings().getAsr();
+        startTimes.add(convertStringToLong(day,time));
+
+        titles.add("Maghrib Prayer");
+        time = response.body().getData().getTimings().getMaghrib();
+        startTimes.add(convertStringToLong(day,time));
+
+        titles.add("Isha Prayer");
+        time = response.body().getData().getTimings().getIsha();
+        startTimes.add(convertStringToLong(day,time));
+        Toast.makeText(getApplicationContext(), "Saved", Toast.LENGTH_SHORT).show();
+
+    }
+
+    private long convertStringToLong(String day, String time){
+        String s = day + " " + time;
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("d MMM yyyy HH:mm");
+        Date date;
+        long epoch = 1486104852532L;
+        try
+        {
+            date = simpleDateFormat.parse(s);
+            epoch = date.getTime();
         }
+        catch (ParseException ex)
+        {
+            Log.v("Exception ",ex.toString());
+        }
+        return epoch;
+    };
+
+    @Override
+    public void onFailure(Call<MainPojo> call, Throwable t) {
+        Toast.makeText(MainActivity.this, t.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
     }
 
     public void getEvents() {
-
-        //titles.add(title);
-        //descriptions.add(description);
-        //beginTimes.add(begin);
-
-    }
-
-    // Connect to the data layer when the Activity starts
-    @Override
-    protected void onStart() {
-        super.onStart();
         googleClient.connect();
     }
 
     @Override
     public void onConnected(Bundle connectionHint) {
 
-        String WEARABLE_DATA_PATH = "/wearable_data";
+        String PRAYER_DATA_PATH = "/prayer_data";
 
         // Create a DataMap object and send it to the data layer
         DataMap dataMap = new DataMap();
         dataMap.putLong("numbers", titles.size());
         for(int x =0; x < titles.size(); x++){
             dataMap.putString("title"+x, titles.get(x));
-            dataMap.putString("description"+x, descriptions.get(x));
-            dataMap.putLong("begin"+x, startTimes.get(x));
+            dataMap.putLong("starttimes"+x, startTimes.get(x));
         }
         dataMap.putLong("time", System.currentTimeMillis());
+        titles.clear();
+        startTimes.clear();
 
         //Requires a new thread to avoid blocking the UI
-        new SendToDataLayerThread(WEARABLE_DATA_PATH, dataMap).start();
+        new SendToDataLayerThread(PRAYER_DATA_PATH, dataMap).start();
         Toast.makeText(getApplicationContext(), "Sended Data", Toast.LENGTH_SHORT).show();
     }
 

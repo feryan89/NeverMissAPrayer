@@ -113,7 +113,10 @@ public class MainActivity extends Activity {
         for(int x = 0; x < titles.size(); x++){
             display += titles.get(x) + ": ";
             display += "Go to the mosque. " + ": ";
-            display += Long.toString(startTimes.get(x)) + "\n";
+            Date date=new Date(startTimes.get(x));
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+            String theDate = sdf.format(date);
+            display += theDate + "\n";
         }
         mTextView.setText(display);
     }

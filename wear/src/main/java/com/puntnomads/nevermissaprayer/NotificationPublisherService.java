@@ -68,7 +68,7 @@ public class NotificationPublisherService extends Service implements SensorEvent
         wakelock.acquire(601000);
         timer = new CountDownTimer(600000, 1000) {
             public void onTick(long millisUntilFinished) {
-                if(distance > 49) {
+                if(distance > 5) {
                     notificationManager.notify(id, notification);
                     cancelCountDownTimer();
                 }

@@ -1,5 +1,8 @@
 package com.puntnomads.nevermissaprayer;
 
+import android.app.ProgressDialog;
+import android.os.AsyncTask;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -20,14 +23,15 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
+import com.puntnomads.nevermissaprayer.parser.JSONParser;
+import com.puntnomads.nevermissaprayer.utils.Keys;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity implements
-        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, Callback<MainPojo> {
+        GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
     private Button syncButton;
     private Button sendButton;
@@ -64,51 +68,10 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     private void getDataFromAPI(){
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://aladhan.com/prayer-times-api/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-
-        // prepare call in Retrofit 2.0
-        AladhanAPI aladhanAPI = retrofit.create(AladhanAPI.class);
-
-        // http://api.aladhan.com/timingsByCity/1486192485?city=Dubai&country=AE&method=4
-        String timestamp = Long.toString((System.currentTimeMillis()/1000)+43200);
-        String url = "http://api.aladhan.com"+"/timingsByCity/" + timestamp + "?city=AbuDhabi&country=AE&method=4";
-        Call<MainPojo> call = aladhanAPI.loadPrayerTimes(url);
-        //asynchronous call
-        call.enqueue(this);
+        new GetDataTask().execute();
     }
 
-    @Override
-    public void onResponse(Call<MainPojo> call, Response<MainPojo> response) {
-        String day = response.body().getData().getDate().getReadable();
-        String time;
-
-        titles.add("Fajr Prayer");
-        time = response.body().getData().getTimings().getFajr();
-        startTimes.add(convertStringToLong(day,time));
-
-        titles.add("Dhuhr Prayer");
-        time = response.body().getData().getTimings().getDhuhr();
-        startTimes.add(convertStringToLong(day,time));
-
-        titles.add("Asr Prayer");
-        time = response.body().getData().getTimings().getAsr();
-        startTimes.add(convertStringToLong(day,time));
-
-        titles.add("Maghrib Prayer");
-        time = response.body().getData().getTimings().getMaghrib();
-        startTimes.add(convertStringToLong(day,time));
-
-        titles.add("Isha Prayer");
-        time = response.body().getData().getTimings().getIsha();
-        startTimes.add(convertStringToLong(day,time));
-        Toast.makeText(getApplicationContext(), "Saved", Toast.LENGTH_SHORT).show();
-
-    }
-
-    private long convertStringToLong(String day, String time){
+    private long convertStringToLong(String day, String time, String prayer){
         String s = day + " " + time;
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("d MMM yyyy HH:mm");
         Date date;
@@ -124,11 +87,6 @@ public class MainActivity extends AppCompatActivity implements
         }
         return epoch;
     };
-
-    @Override
-    public void onFailure(Call<MainPojo> call, Throwable t) {
-        Toast.makeText(MainActivity.this, t.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
-    }
 
     public void getEvents() {
         googleClient.connect();
@@ -196,5 +154,106 @@ public class MainActivity extends AppCompatActivity implements
         }
     }
 
+    /**
+     * Creating Get Data Task for Getting Data From Web
+     */
+    class GetDataTask extends AsyncTask<Void, Void, Void> {
 
+        ProgressDialog dialog;
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            /**
+             * Progress Dialog for User Interaction
+             */
+            dialog = new ProgressDialog(MainActivity.this);
+            dialog.setTitle("Hey Wait Please...");
+            dialog.setMessage("I am getting your JSON");
+            dialog.show();
+        }
+
+        @Nullable
+        @Override
+        protected Void doInBackground(Void... params) {
+
+            /**
+             * Getting JSON Object from Web Using okHttp
+             */
+            JSONParser jsonParser = new JSONParser();
+            JSONObject jsonObject = jsonParser.getDataFromWeb();
+
+            try {
+                /**
+                 * Check Whether Its NULL???
+                 */
+                if (jsonObject != null) {
+                    /**
+                     * Check Length...
+                     */
+                    if(jsonObject.length() > 0) {
+                        /**
+                         * Getting Array named "contacts" From MAIN Json Object
+                         */
+                        JSONArray array = jsonObject.getJSONArray(Keys.KEY_DATA);
+
+                        /**
+                         * Check Length of Array...
+                         */
+                        int lenArray = array.length();
+                        if(lenArray > 0) {
+                            for(int jIndex = 0; jIndex < lenArray; jIndex++) {
+
+                                /**
+                                 * Getting Inner Object from contacts array...
+                                 * and
+                                 * From that We will get Name of that Contact
+                                 *
+                                 */
+                                JSONObject innerObject = array.getJSONObject(jIndex);
+                                JSONObject dateObject = innerObject.getJSONObject(Keys.KEY_DATE);
+                                String today = dateObject.getString(Keys.KEY_READABLE);
+                                JSONObject timingsObject = innerObject.getJSONObject(Keys.KEY_TIMINGS);
+                                String fajrTime = timingsObject.getString(Keys.KEY_FAJR);
+                                String dhuhrTime = timingsObject.getString(Keys.KEY_DHUHR);
+                                String asrTime = timingsObject.getString(Keys.KEY_ASR);
+                                String maghribTime = timingsObject.getString(Keys.KEY_MAGHRIB);
+                                String ishaTime = timingsObject.getString(Keys.KEY_ISHA);
+
+                                titles.add("Fajr Prayer");
+                                startTimes.add(convertStringToLong(today,fajrTime,"Fajr"));
+
+                                titles.add("Dhuhr Prayer");
+                                startTimes.add(convertStringToLong(today,dhuhrTime,"Dhuhr"));
+
+                                titles.add("Asr Prayer");
+                                startTimes.add(convertStringToLong(today,asrTime,"Asr"));
+
+                                titles.add("Maghrib Prayer");
+                                startTimes.add(convertStringToLong(today,maghribTime,"Maghrib"));
+
+                                titles.add("Isha Prayer");
+                                startTimes.add(convertStringToLong(today,ishaTime,"Isha"));
+
+                            }
+                        }
+                    }
+                } else {
+
+                }
+            } catch (JSONException je) {
+                Log.i(JSONParser.TAG, "" + je.getLocalizedMessage());
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            dialog.dismiss();
+            Toast.makeText(getApplicationContext(), "Saved", Toast.LENGTH_SHORT).show();
+        }
+    }
 }
+
+
